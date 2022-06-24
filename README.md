@@ -28,9 +28,11 @@ The R [code](https://github.com/Samantha-Britschgi/Predicting-Store-Sales/blob/7
     
 ### Findings
 The initial basic model prediction indicated an NNetar model may be best. 
+
 <img src="https://github.com/Samantha-Britschgi/Predicting-Store-Sales/blob/de62b47e18c676a0e1e6fd1374567a7b87c02d9c/BasicModelsStoreSalesPrediction.png" width="500" height="300" />
 
 The models that were built were a basic Lasso, basic XGBoost, and then these basic models had a ensemble methods applied. The ensemble versions of the models did the best with higher accuracy and higher area under the curve.
+
 <img src="https://github.com/Samantha-Britschgi/Predicting-Store-Sales/blob/de62b47e18c676a0e1e6fd1374567a7b87c02d9c/ModelsStoreSalesPrediction.png" width="550" height="300" />
 
 Based on the accuracy being low (around 56%) for even the better performing ensemble method models, it is recommended that these ensemble models or NNetar model get expanded on to improve accuracy.

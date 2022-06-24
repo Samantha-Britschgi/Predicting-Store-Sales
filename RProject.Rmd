@@ -1,0 +1,517 @@
+---
+title: "Project"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 75
+---
+
+#Introduction
+
+## Install Packages
+
+install.packages("ggplot2")
+
+install.packages("tidyverse") install.packages("dplyr")
+install.packages("Metrics") install.packages("ggraph")
+install.packages("caret") install.packages("plotly")
+install.packages("xgboost") install.packages("ggthemes")
+install.packages("ggalt") install.packages("ggrepel")
+install.packages("viridis") install.packages("gganimate")
+install.packages("gapminder") install.packages("magrittr")
+install.packages("lubridate") install.packages("forecast")
+install.packages("hrbrthemes") install.packages("viridis")
+install.packages('ggridges') install.packages('ggcorrplot')
+install.packages("scales") install.packages('ggExtra')
+install.packages('pROC')
+
+## Import Libraries
+
+```{r}
+library(ggExtra) 
+library(scales) 
+library(ggcorrplot) 
+library(ggridges)
+library(hrbrthemes) 
+library(viridis) 
+library(ggplot2) 
+library(tidyverse)
+library(dplyr) 
+library(Metrics) 
+library(ggraph) 
+library(caret)
+library(plotly) 
+library(xgboost) 
+library(ggthemes) 
+library(ggalt)
+library(ggrepel) 
+library(magrittr) 
+library(lubridate) 
+library(forecast)
+library(pROC)
+library(dummies)
+library(keras)
+library(tensorflow)
+```
+
+# Data Prep
+
+## Load Data
+
+```{r}
+df_hol = read.csv('holidays_events.csv') 
+df_oil = read.csv('oil.csv')
+df_stores = read.csv('stores.csv') 
+df_trans =read.csv('transactions.csv') 
+df_train = read.csv('train.csv') 
+df_test = read.csv('test.csv')
+```
+
+## Merge data
+
+```{r}
+dt1 = df_train %>% left_join(df_hol,by="date") 
+dt1 = dt1 %>% left_join(df_oil,by="date") 
+dt1 = dt1 %>% left_join(df_stores,by="store_nbr") 
+dt1 = dt1 %>% left_join(df_trans,by= c("date", "store_nbr")) 
+dt1 <- dt1 %>% rename(holiday.type = type.x) 
+dt1 <- dt1 %>% rename(store.type = type.y) 
+colnames(dt1)
+```
+
+## Format Dates
+
+```{r}
+dt1$day <- dt1$date %>% day() 
+dt1$month <- dt1$date %>% month()
+dt1$month_lab <- dt1$date %>% month(label = TRUE) 
+dt1$year <- dt1$date %>% year() 
+dt1$week <- dt1$date %>% week() 
+dt1$week_day <- dt1$date %>% wday(week_start = getOption("lubridate.week.start", 1), label =
+TRUE)
+dt1['date']<-as.Date(dt1$date, format='%Y-%m-%d') 
+df_oil['date']<-as.Date(df_oil$date, format='%Y-%m-%d') 
+df_trans['date']<-as.Date(df_trans$date,format='%Y-%m-%d')
+```
+
+## Get Rid/Impute Outliers based on IQR
+
+```{r}
+dt2 <- dt1
+Q1 <- quantile(dt2$sales, .25)
+Q3 <- quantile(dt2$sales, .75)
+IQR <- IQR(dt2$sales)
+df_clean<- subset(dt2, dt2$sales> (Q1 - 1.5*IQR) & dt2$sales< (Q3 + 1.5*IQR))
+dim(dt1)
+dim(df_clean)
+df_clean <- dt1
+```
+
+# EDA
+
+## Yearly, Monthly, Weekly, & Day of Week Sale Seasonality
+
+```{r}
+DayOfWeekSale <- df_clean %>%group_by(week_day) %>% 
+  summarise(avg_sales_by_day = mean(sales)) %>% 
+  ggplot()+
+    geom_col(aes(x=week_day, y=avg_sales_by_day, fill = week_day), size = 0.5, colour="black")+
+scale_fill_brewer(palette = "YlGn")+
+theme_classic()+
+    labs(title = "Day of Week Sales",
+         x = "Day of the week",
+         y = "Average Saless",
+         fill = "Day of week")+ theme(plot.title = element_text(face = "bold", hjust = 0.5,colour = "#156423"))+
+    guides(fill = "none")
+
+WeeklySale<- df_clean %>% 
+  group_by(week) %>% 
+  summarise(avg_sales_by_week = mean(sales)) %>% 
+  ggplot()+
+    geom_col(aes(x=week, y=avg_sales_by_week, fill = as_factor(week)), size = 0.5, colour="black")+
+    scale_fill_viridis_d()+
+    theme_classic()+
+    labs(title = "Weekly Sales",
+         x = "Week",
+         y = "Average Sales",
+         fill = "Week")+ theme(plot.title = element_text(face = "bold", hjust = 0.5))+
+    guides(fill = "none")
+
+MonthlySale <- df_clean %>% 
+  group_by(month_lab) %>% 
+  summarise(avg_sales_by_month = mean(sales)) %>% 
+  ggplot()+
+    geom_col(aes(x=month_lab, y=avg_sales_by_month, fill = month_lab), size = 0.5, colour="black")+
+    scale_fill_viridis_d()+
+    theme_classic()+
+labs(title = "Monthly Sales",
+         x = "Month",
+         y = "Average Sales",
+         fill = "Month")+ theme(plot.title = element_text(face = "bold", hjust = 0.5))+
+    guides(fill = "none")
+
+YearlySale <- df_clean %>% 
+  group_by(year) %>% 
+  summarise(avg_sales_by_year = mean(sales)) %>% 
+  ggplot()+
+    geom_col(aes(x=year, y=avg_sales_by_year, fill = as_factor(year)), size = 0.5, colour="black")+
+scale_fill_brewer(palette = "YlGn")+
+  theme_classic()+
+labs(title = "Yearly Sales",
+         x = "Year",
+         y = "Average Sales",
+         fill = "Year")+ theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))+
+    guides(fill = "none")
+    
+DayOfWeekSale
+### Higher Sales on Sat/Sun
+WeeklySale
+### Higher Sales week 52 - 54 & weeks when pay days are present
+MonthlySale
+### Larger Sales in Jul & Dec
+YearlySale
+### Sales have grown each year
+```
+
+## EDA Sales
+
+```{r}
+colnames(df_clean)
+StoreSale <- df_clean %>% 
+  group_by(store.type) %>% summarise(meansales = mean(sales))
+StoreTypeSales <- ggplot(StoreSale, aes(store.type, meansales,fill = as_factor(store.type)))+ geom_bar(stat = 'identity', size = 0.5, colour="black")+
+  coord_flip()+labs(title = "Store Type Average Sales", y = "Average Sales", x = "Store Type")+
+scale_fill_brewer(palette = "YlGn")+
+  theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+StoreTypeSales
+
+StoreTrans <-df_clean %>% ggplot(aes(y=store.type, x=transactions,  fill=store.type)) +
+    geom_density_ridges(alpha=0.6, stat="binline", bins=100) + scale_fill_brewer(palette = "YlGn")+labs(title = "Store Type Transactions", y = "Store Type", x = "Transactions")+scale_x_continuous(labels = comma)+theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+StoreTrans
+
+```
+
+## EDA store type vs holiday type, store type /holiday type vs year & month (for sales)
+
+```{r}
+HolSale <- df_clean %>% 
+  group_by(holiday.type) %>% summarise(totalsales = sum(sales))
+HolTypeSales <- HolSale %>% filter(holiday.type != "NA") %>% ggplot(aes(holiday.type, totalsales,fill = as_factor(holiday.type)))+ geom_bar(stat = 'identity', size = 0.5, colour="black")+
+  coord_flip()+ labs(title = "Holiday Type Average Sales", y = "Average Sales", x = "Store Type")+
+scale_fill_brewer(palette = "YlGn") + scale_y_continuous(labels = comma)+
+  theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+HolTypeSales
+
+HolidayTrans <-df_clean %>% group_by(holiday.type) %>% filter(holiday.type != "NA") %>% ggplot(aes(y=holiday.type, x=transactions,  fill=holiday.type)) +
+    geom_density_ridges() + scale_fill_brewer(palette = "YlGn")+labs(title = "Holiday Type Transactions", y = "Holiday Type", x = "Transactions")+scale_x_continuous(labels = comma)+theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+HolidayTrans
+#the holiday type with the most sales is a holiday (transfers are holidays that were moved to a different weekday), and has double the amount of sales as event type holidays, so holidays/transfers will be considered when exploring the predictive model
+#Although holiday type has the most sales, the Work Day, additional days, & Bridge days have a wider distribution of transactions so those holday types may sell a lot of items that are at a lower cost
+```
+
+## EDA for Earthquake
+
+```{r}
+colnames(df_clean)
+#4/16/16 EARTHQUAKE
+#public sector workers paid on 15th, peaks on Sat/Sun, 4/17/16 is a Sund
+p<- ggplot(df_clean, aes(x=date, y=sales)) +
+  geom_line() + theme_classic()+ scale_x_date(limit=c(as.Date("2016-03-01"),as.Date("2016-05-30")), date_breaks = "1 week", date_labels = "%m-%d")+
+  xlab("")+ geom_line(color="#156423")+labs(title = "Earthquake Impact", y ="Sales", x = "Date")+ theme(axis.text.x=element_text(angle=60, hjust=1), plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))+scale_y_continuous(labels = comma)
+p
+#following the earthquake on 4/16/16 you can see that there are larger abnormal spikes not coinciding with paydays (the 15 & last day of the month), so it is possible these spikes are tied to the earthquake and will be considered when creating predictive models
+```
+
+## EDA for State
+
+```{r}
+StateSales <- df_clean %>% 
+  group_by(state) %>% summarise(totalsales = sum(sales))
+StateSales <- StateSales %>% ggplot(aes(state, totalsales,fill = as_factor(state)))+ geom_bar(stat = 'identity', size = 0.5, colour="black")+
+  coord_flip()+ labs(title = "Average State Sales", y = "Average Sales", x = "State")+scale_fill_viridis_d()+ scale_y_continuous(labels = comma)+
+  theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+StateSales
+
+StateTrans <-df_clean %>% group_by(state) %>% ggplot(aes(y=state, x=transactions, fill=state)) +scale_fill_viridis_d()+
+    geom_density_ridges() + labs(title = "State Transactions", y = "State", x = "Transactions")+scale_x_continuous(labels = comma)+theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))
+StateTrans
+#the state with the most sales is Pichincha with about triple the amount of sales as the next leading states which is Guayas, Pichincha typically has 2k - 4k transactions while most other states stay beween 1k - 2k transactions
+```
+
+## EDA for Oil
+
+```{r}
+df_oil['date']<-as.Date(df_oil$date, format='%Y-%m-%d')
+df_train['date']<-as.Date(df_train$date, format='%Y-%m-%d') 
+df_train %>% 
+  filter(sales>0) %>% 
+  group_by(date) %>% 
+  summarise(avg_sales_per_day = mean(sales, na.rm=TRUE)) %>% 
+  right_join(df_oil, by='date') %>% 
+  ggplot()+
+    geom_line(aes(x = date, y = scale(dcoilwtico), colour = 'Oil_price'), na.rm = TRUE)+
+    geom_line(aes(x = date, y = scale(avg_sales_per_day), colour = 'Sales'), na.rm = TRUE)+scale_color_manual(values=c('#9BE261','#156423'))+
+  labs(title = "Total store sales compared to local oil prices: 2013-2018",
+       subtitle = "Normalised data is used for comparrison",
+       y= "Oil (scaled)") +theme_classic()+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423")) 
+#this economy is heavily dependent upon oil so while oil prices decline while sales continure to increase YoY, it is possible that sales increase while oil prices drop due to oil companies paying their workers more money or from companies being able to sell more oil at a lower cost 
+```
+
+## EDA for Product
+
+```{r}
+colnames(df_clean)
+ProductSale <- df_clean %>% filter(sales > 0) %>% 
+  group_by(family) %>% 
+  summarise(avg_sales_by_prod = mean(sales)) %>%
+  ggplot()+
+    geom_col(aes(x=family, y=avg_sales_by_prod, fill = as_factor(family)), size = 0.5, colour="black")+
+scale_fill_viridis_d()+
+  theme_classic()+
+labs(title = "Product Sales",
+         x = "Product",
+         y = "Average Sales",
+         fill = "Year")+ theme(axis.text.x=element_text(angle=60, hjust=1), plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))+
+    guides(fill = "none")
+ProductSale
+
+ProductTrans <-df_clean %>% group_by(family) %>% ggplot(aes(y=family, x=transactions,  fill=family)) +
+    geom_density_ridges(stat="binline", bins=100) + scale_fill_viridis_d() +labs(title = "Product Transactions", y = "Product", x = "Transactions")+scale_x_continuous(labels = comma)+theme_classic()+ theme(legend.position="none")+theme(plot.title = element_text(face = "bold", hjust = 0.5, colour = "#156423"))+xlim(0,3000)
+ProductTrans
+
+#the product with the most sales are groceries with almost double the amount of sales as the next leading product which is beverages and the third leading item is produce indicating that their food items bring in the most for sales 
+```
+
+# Basic Model Comparison
+```{r}
+install.packages('fpp2')
+install.packages(TTR)
+library(fpp2)
+library(TTR)
+df_clean1<-na.omit(df_clean)
+index = sample(1:nrow(df_clean1), 0.7*nrow(df_clean1)) 
+set.seed(100)
+## basic forecasting model
+
+df_training <- df_clean1 %>%
+    group_by(date) %>%
+    arrange(date)
+df_testing <- df_test %>%
+    group_by(date) %>%
+    arrange(date)
+nrow(df_training)
+nrow(df_testing)
+
+dat_ts <- ts(df_training$sales, start = c(2016, 01, 01), end = c(2017, 08, 01), frequency = 365)
+ 
+## lines 2 to 4
+mape <- function(actual,pred){
+  mape <- mean(abs((actual - pred)/actual))*100
+  return (mape)
+}
+
+## seasonal naive method 0.6281476
+snaive_model <- snaive(dat_ts, h=18,level=c(95))
+summary(snaive_model)
+plot(snaive_model)
+df_fc = as.data.frame(snaive_model)
+mase(dat_test$sales, df_fc$`Point Forecast`, step_size = 1) 
+
+## smoothed exponential model 0.6281476
+se_model <- ses(dat_ts, level=c(95), h=18)
+summary(se_model)
+plot(se_model)
+df_fc = as.data.frame(se_model)
+mase(dat_test$sales, df_fc$`Point Forecast`, step_size = 1) 
+
+## arima model 0.648999
+arima_model1 <- arima(dat_ts,order=c(1,1,1))
+summary(arima_model1)
+plot.ts(arima_model1$residuals)
+fore_arima = forecast::forecast(arima_model1, h=18)
+df_arima = as.data.frame(fore_arima)
+mase(dat_test$sales, df_arima$`Point Forecast`, step_size = 1) 
+
+## auto fitted arima model 0.8765872
+set.seed(100)
+arima_model2 <- auto.arima(dat_ts)
+summary(arima_model2)
+plot.ts(arima_model2$residuals)
+fore_arima = forecast::forecast(arima_model2, h=18)
+df_arima = as.data.frame(fore_arima)
+mase(dat_test$sales, df_arima$`Point Forecast`, step_size = 1) 
+
+## nn method
+nn_model <- nnetar(dat_ts, h=18)
+summary(nn_model)
+accuracy(nn_model)
+
+## holt model 0.6569945
+holt_model <- holt(dat_ts, h = 18,level=c(95))
+summary(holt_model)
+plot(holt_model)
+df_fc = as.data.frame(holt_model)
+mase(dat_test$sales, df_fc$`Point Forecast`, step_size = 1) 
+
+
+```
+# Ensemble Model Prep & test (lasso)
+```{r}
+set.seed(100)
+
+df_clean$salesCat <- ifelse(df_clean$sales>=500, "high", ifelse(df_clean$sales<500 & df_clean$sales>=100, "medium", ifelse(df_clean$sales<100 & df_clean$sales>0, "low", "zero")))
+
+df_clean$salesCat <- factor(df_clean$salesCat, levels = c("high", "medium", "low", "zero"), ordered = TRUE)
+
+levels(df_clean$salesCat)
+
+prop.table(table(df_clean$salesCat))
+
+fitControl <- trainControl(
+  method = "cv",
+  number = 5,
+savePredictions = 'final',
+classProbs = T)
+
+df_clean1 <- na.omit(df_clean)
+test <- createDataPartition(y = df_clean1$salesCat, p= .7, list = FALSE)
+df_training <- df_clean1[test,]
+df_testing <- df_clean1[-test,]
+
+nrow(df_training)
+nrow(df_testing)
+
+df_training <- sample_n(df_training, 10000)
+df_testing <- sample_n(df_testing, 10000)
+
+prop.table(table(df_training$salesCat))
+prop.table(table(df_testing$salesCat))
+
+x <- model.matrix(salesCat ~ onpromotion + locale + description + transferred + dcoilwtico + city + store.type + cluster + transactions + day + month + year, data = df_training)
+
+test_model <- train(x, df_testing$salesCat, method='glmnet', trControl=fitControl)
+test_model
+
+df_testing$preds <- predict(object=test_model, x)
+auc <- roc(df_testing$salesCat, df_testing$preds)
+print(auc$auc) 
+```
+
+
+```{r}
+# Train Ensemble Model
+
+model_las <- test_model
+model_xgb <- train(x, df_training$salesCat, method='xgbTree', trControl=fitControl, verbose = TRUE, verbosity = 0)
+model_xgb
+
+preds <- predict(object=model_xgb, x)
+auc <- roc(df_training$salesCat, preds)
+print(auc$auc) 
+
+```
+
+```{r}
+# Predict with Testing Data
+
+df_testing$las_PROB <- predict(object=model_las, x)
+df_testing$xgb_PROB <- predict(object=model_xgb, x)
+
+```
+
+
+```{r}
+# Final Blending Model with Lasso
+
+predictors_top <- model.matrix(salesCat ~ las_PROB + xgb_PROB, data = df_testing)
+
+las_ens <- train(predictors_top,df_training$salesCat,method='glmnet',trControl=fitControl)
+las_ens
+
+preds <- predict(object=las_ens, predictors_top)
+auc <- roc(df_training$salesCat, preds)
+print(auc$auc) 
+
+```
+```{r}
+# Final Blending Model with XGBoost
+
+xgb_ens <- train(predictors_top,df_training$salesCat,method='xgbTree',trControl=fitControl, verbose = TRUE, verbosity = 0)
+xgb_ens
+
+preds <- predict(object=las_ens, predictors_top)
+auc <- roc(df_training$salesCat, preds)
+print(auc$auc) 
+```
+
+
+
+```{r}
+#LSTM ATTEMPT
+install.packages('devtools')
+devtools::install_github("rstudio/keras")
+library(keras)
+  install_tensorflow()
+
+## Load and prep data!
+df_train['date']<-as.Date(df_train$date, format='%Y-%m-%d') 
+df = df_train
+N = nrow(df)
+p = ncol(df)
+X = dummy.data.frame(df[, -p])
+Y = df[, p]
+data = cbind(X, Y)
+
+## split data, training & testing, 80:20, AND convert dataframe to an array
+
+Ind = sample(N, N*0.8, replace = FALSE) 
+p = ncol(data)
+Y_train = data.matrix(data[Ind, p])
+X_train  = data.matrix(data[Ind, -p])
+
+Y_test = data.matrix(data[-Ind, p])
+X_test  = data.matrix(data[-Ind, -p])
+
+k = ncol(X_train)
+
+## create your model,and add layers 
+
+model <- keras_model_sequential() 
+model %>% 
+  layer_dense(units = 30, activation = 'relu', input_shape = k) %>% 
+  layer_dropout(rate = 0.2) %>% 
+  layer_dense(units = 20, activation = 'relu') %>%
+  layer_dropout(rate = 0.2) %>%
+  layer_dense(units = 1, activation = 'sigmoid')
+  
+summary(model)
+
+## compile the model
+model  %>%  compile(
+   loss = 'binary_crossentropy',
+   optimizer = optimizer_adam( lr= 0.0001 , decay = 1e-6 ),  
+   metrics = c('accuracy')
+
+ )
+
+ ## fit the model
+
+ track = model %>% fit(X_train, Y_train, epochs = 150, batch_size = 10,
+               callbacks = callback_early_stopping(patience = 2, monitor = 'acc'),
+               validation_split = 0.3
+)
+plot(track)
+
+## prediction 
+pred <- model %>% predict(X_test, batch_size = 128)
+Y_pred = round(pred)
+# Confusion matrix
+CM = table(Y_pred, Y_test)
+
+# evaluate the model
+evals <- model %>% evaluate(X_test, Y_test, batch_size = 10)
+
+accuracy = evals[2][[1]]* 100
+```
+
+
